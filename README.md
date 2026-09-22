@@ -61,7 +61,7 @@ gpass [--len N] [--charset CODE] [--save] [--name NAME]
 | --- | --- | --- |
 | `-12` | Password length. The **first** numeric switch. | `13` |
 | `-134` | Character sets (digits combine: `1` lower, `2` upper, `3` digits, `4` special). The **second** numeric switch. | `1234` (all) |
-| `-y` / `--save` | Append `name: password` to `~/Documents/psess.txt`. | off — print once, save nothing |
+| `-y` / `--save` | Append `name  =>  password` to `~/Documents/psess.txt`. | off — print once, save nothing |
 | `-keyOne` / `--name` | Entry name for `-y`. You are prompted if omitted. | none |
 | `-h` / `--help` | Show help and exit. | — |
 
@@ -82,7 +82,7 @@ Notes:
   positional: the first numeric switch is always the length, the second is
   always the charset. A single numeric switch (`gpass -16`) is the length.
   In scripts, prefer the explicit `--len` / `--charset` form.
-- Names may not contain newlines or `:` (the file separator) — this is
+- Names may not contain newlines, `:` or `=>` (the file separators) — this is
   enforced on every input path, including `--name` and the prompt.
 - Length is capped at 512 characters; names at 128.
 - The store is append-only history: saving the same name twice keeps both
@@ -201,7 +201,7 @@ trait OutputSink {
 
 v1 ships one implementation, `FileSink`, which reads the password column of
 the store (tolerant of `k: v` and `{k: v}` shapes) and appends
-`name: password` lines with a single write plus `fsync`. Adding a keychain
+`name  =>  password` lines with a single write plus `fsync`. Adding a keychain
 or encrypted-vault sink means implementing these two methods — the CLI and
 generator never change.
 
@@ -299,9 +299,12 @@ every new input path gets validation plus a test; production code stays
 `~/Documents/psess.txt`, one entry per line:
 
 ```
-keyOne: hqa?ekc;/>60
-github: Z{d0xtQMZ}^{]
+keyOne  =>  hqa?ekc;/>60
+github  =>  Z{d0xtQMZ}^{]
 ```
+
+Old `key: value` lines from earlier versions keep working — they are still
+recognized when checking for duplicates.
 
 Back it up like anything precious — and look forward to the day it holds
 ciphertext instead.

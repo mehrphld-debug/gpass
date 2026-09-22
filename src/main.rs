@@ -6,7 +6,7 @@
 //!   - second numeric switch = charset (default 1234), digits combine:
 //!       1 = lowercase, 2 = UPPERCASE, 3 = digits, 4 = special
 //!     e.g. `-134` = lower + digits + special
-//!   - `-y` / `--save`     = append `{name: password}` to ~/Documents/psess.txt
+//!   - `-y` / `--save`     = append `{name  =>  password}` to ~/Documents/psess.txt
 //!   - `-keyOne` / `--name`= entry name; prompted interactively if `-y` without a name
 //!   - no `-y`             = print once to stdout, save nothing
 //!
@@ -29,7 +29,7 @@ const LOWER: &str = "abcdefghijklmnopqrstuvwxyz";
 const UPPER: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 const DIGITS: &str = "0123456789";
 // Printable ASCII specials except space (32 chars). Excludes nothing that
-// breaks the `name: password` line format except newline itself.
+// breaks the `name  =>  password` line format except newline itself.
 const SPECIAL: &str = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~";
 
 const DEFAULT_LEN: usize = 13;
@@ -129,7 +129,7 @@ SWITCHES (shorthand):
   -134      charset code (default {DEFAULT_CHARSET}). Second numeric switch.
             digits combine: 1=lowercase 2=UPPERCASE 3=digits 4=special
             e.g. -13 = lower+digits, -1234 = all
-  -y        save: append \"name: password\" to ~/Documents/psess.txt (mode 600).
+  -y        save: append \"name  =>  password\" to ~/Documents/psess.txt (mode 600).
             Without -y the password is printed once and saved nowhere.
   -keyOne   entry name for -y. If -y is given without a name you are prompted.
 
@@ -261,9 +261,10 @@ fn validate_name(nm: &str) -> Result<(), String> {
     if nm.len() > 128 {
         return Err("name too long (max 128 chars)".to_string());
     }
-    if nm.contains(['\n', '\r', ':']) {
-        // ':' is our file separator — forbid to keep parsing unambiguous.
-        return Err("name must not contain newline or ':'".to_string());
+    if nm.contains(['\n', '\r', ':']) || nm.contains("=>") {
+        // ':' and '=>' are our file separators (legacy and current) —
+        // forbid both to keep parsing unambiguous.
+        return Err("name must not contain newline, ':' or '=>'".to_string());
     }
     Ok(())
 }
@@ -292,8 +293,8 @@ impl FileSink {
 
 impl OutputSink for FileSink {
     /// Read all previously stored passwords (password column only) so the
-    /// generator can retry on collision. Tolerant of `{k: v}` / `k: v` /
-    /// JSON-line shapes.
+    /// generator can retry on collision. Understands the current
+    /// `k  =>  v` shape plus legacy `{k: v}` / `k: v` / JSON-line shapes.
     fn load_passwords(&self) -> io::Result<HashSet<String>> {
         let mut set = HashSet::new();
         let Ok(file) = std::fs::File::open(&self.path) else {
@@ -304,10 +305,15 @@ impl OutputSink for FileSink {
             if t.is_empty() {
                 continue;
             }
-            // password = text after first ':'; strip braces/quotes/spaces
-            let pw = match t.find(':') {
-                Some(idx) => &t[idx + 1..],
-                None => continue,
+            // password = text after first '=>'; fall back to legacy ':'
+            // so files written by older versions still count.
+            // strip braces/quotes/spaces
+            let pw = match t.find("=>") {
+                Some(idx) => &t[idx + 2..],
+                None => match t.find(':') {
+                    Some(idx) => &t[idx + 1..],
+                    None => continue,
+                },
             };
             let pw = pw
                 .trim()
@@ -327,7 +333,7 @@ impl OutputSink for FileSink {
         Ok(set)
     }
 
-    /// Append `name: password` atomically-ish (single write + fsync),
+    /// Append `name  =>  password` atomically-ish (single write + fsync),
     /// tighten permissions to 600. Resources close via Drop.
     fn store(&self, name: &str, password: &str) -> io::Result<PathBuf> {
         if let Some(parent) = self.path.parent() {
@@ -341,7 +347,7 @@ impl OutputSink for FileSink {
                 .append(true)
                 .mode(0o600)
                 .open(&self.path)?;
-            writeln!(f, "{name}: {password}")?;
+            writeln!(f, "{name}  =>  {password}")?;
             f.sync_all()?;
         }
         #[cfg(not(unix))]
@@ -350,7 +356,7 @@ impl OutputSink for FileSink {
                 .create(true)
                 .append(true)
                 .open(&self.path)?;
-            writeln!(f, "{name}: {password}")?;
+            writeln!(f, "{name}  =>  {password}")?;
             f.sync_all()?;
         }
         // Tighten pre-existing files that may have loose perms.
@@ -507,6 +513,8 @@ mod tests {
         assert!(parse_args(&args(&["--name", "a\nb"])).is_err());
         assert!(parse_args(&args(&["--name=a\nb"])).is_err());
         assert!(parse_args(&args(&["-a:b"])).is_err());
+        assert!(parse_args(&args(&["--name", "a=>b"])).is_err());
+        assert!(parse_args(&args(&["--name=a=>b"])).is_err());
         assert!(parse_args(&args(&["-y", "--name", "ok"])).is_ok());
     }
 }
