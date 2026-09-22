@@ -139,10 +139,21 @@ gpass -12 -134
 
 ### Uninstall
 
+macOS:
+
 ```bash
-rm /opt/homebrew/bin/gpass   # or wherever you copied it
-# your saved passwords in ~/Documents/psess.txt are left untouched
+rm /opt/homebrew/bin/gpass   # Apple Silicon
+# rm /usr/local/bin/gpass    # Intel Macs
 ```
+
+Linux:
+
+```bash
+sudo rm /usr/local/bin/gpass
+# rm ~/.local/bin/gpass      # if you installed without sudo
+```
+
+Your saved passwords in `~/Documents/psess.txt` are left untouched.
 
 ## Architecture
 
